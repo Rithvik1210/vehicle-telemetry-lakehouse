@@ -14,7 +14,7 @@ Data quality rules run between layers and write results to a table.
 
 ## Roadmap
 - [x] Week 1: generator + bronze ingestion
-- [ ] Week 2: silver + quarantine
+- [x] Week 2: silver + quarantine
 - [ ] Week 3: data quality checks
 - [ ] Week 4: gold tables + Databricks Job
 - [ ] Week 5: tests, diagram, docs
