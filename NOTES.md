@@ -23,3 +23,23 @@ happen to share a timestamp, not re-sent copies of the same reading.
 kind of telemetry data. A production system would need either a proper
 unique event ID per reading, or a defined merge/conflict rule (e.g.
 last-write-wins) for genuinely colliding timestamps.
+
+
+## Update: same root cause resurfaced in Week 4 Gold tables
+
+The Week 3 late-arrival timestamp shift also affects Gold aggregations:
+shifting a timestamp backward can push it across the midnight boundary into
+the day before the dataset's intended start. Confirmed with:
+
+```sql
+SELECT MIN(event_date), MAX(event_date), COUNT(DISTINCT event_date)
+FROM main.vehicle_telemetry.gold_vehicle_daily_health;
+```
+
+Result: dates ranged from 2025-12-31 to 2026-01-07 — 8 distinct days
+instead of the intended 7. This produced 158 vehicle-day rows instead of
+140, and a few extra small "trips" formed by these boundary-date readings.
+
+This confirms the Week 3 finding is systemic (one generator design
+choice), not an isolated glitch — it resurfaces wherever data gets grouped
+by calendar date or ordered by timestamp.
