@@ -36,7 +36,7 @@ SELECT MIN(event_date), MAX(event_date), COUNT(DISTINCT event_date)
 FROM main.vehicle_telemetry.gold_vehicle_daily_health;
 ```
 
-Result: dates ranged from 2025-12-31 to 2026-01-07 — 8 distinct days
+Result: dates ranged from 2025-12-31 to 2026-01-07 — 8 distinct days.
 instead of the intended 7. This produced 158 vehicle-day rows instead of
 140, and a few extra small "trips" formed by these boundary-date readings.
 
