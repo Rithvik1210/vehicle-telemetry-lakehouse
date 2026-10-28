@@ -16,7 +16,7 @@ Data quality rules run between layers and write results to a table.
 - [x] Week 1: generator + bronze ingestion
 - [x] Week 2: silver + quarantine
 - [x] Week 3: data quality checks
-- [ ] Week 4: gold tables + Databricks Job
+- [x] Week 4: gold tables + Databricks Job
 - [ ] Week 5: tests, diagram, docs
 - [ ] Optional: MLflow anomaly detection
 
