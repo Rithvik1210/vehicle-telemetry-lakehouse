@@ -1,20 +1,34 @@
-# Vehicle Telemetry Generator
+# Databricks notebook source
+# MAGIC %md
+# MAGIC # Vehicle Telemetry Generator
+# MAGIC
+# MAGIC Simulates ~20 vehicles sending telemetry every 10 seconds over 7 days.
+# MAGIC Writes data in hourly JSON batches to `landing/` to mimic real arrival,
+# MAGIC on purpose including duplicates, nulls, out-of-range values, late timestamps,
+# MAGIC and GPS jumps so the Bronze/Silver layers have something real to clean.
+# MAGIC
+# MAGIC All data is 100% synthetic. No real vehicles, people, or company data.
 
-Simulates ~20 vehicles sending telemetry every 10 seconds over 7 days.
-Writes data in hourly JSON batches to `landing/` to mimic real arrival,
-on purpose including duplicates, nulls, out-of-range values, late timestamps,
-and GPS jumps so the Bronze/Silver layers have something real to clean.
+# COMMAND ----------
 
-All data is 100% synthetic. No real vehicles, people, or company data.
 import json
 import random
 import math
 from datetime import datetime, timedelta
 
 random.seed(42)  # reproducible runs
-## Config — change these to scale the dataset up or down
-CATALOG = "main"                       # change to your catalog
-SCHEMA = "vehicle_telemetry"
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Config — change these to scale the dataset up or down
+
+# COMMAND ----------
+
+dbutils.widgets.text("catalog", "main", "Catalog")
+dbutils.widgets.text("schema", "vehicle_telemetry", "Schema")
+CATALOG = dbutils.widgets.get("catalog")
+SCHEMA = dbutils.widgets.get("schema")
 VOLUME = "landing"
 LANDING_PATH = f"/Volumes/{CATALOG}/{SCHEMA}/{VOLUME}"
 
@@ -33,7 +47,14 @@ GPS_JUMP_RATE = 0.005
 # fault injection: a handful of vehicles get a deliberate fault window each,
 # used later as ground truth to test data quality rules and (optionally) anomaly detection
 FAULT_VEHICLE_COUNT = 4
-## Set up catalog, schema, and landing volume
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Set up catalog, schema, and landing volume
+
+# COMMAND ----------
+
 spark.sql(f"CREATE CATALOG IF NOT EXISTS {CATALOG}")
 spark.sql(f"CREATE SCHEMA IF NOT EXISTS {CATALOG}.{SCHEMA}")
 spark.sql(f"CREATE VOLUME IF NOT EXISTS {CATALOG}.{SCHEMA}.{VOLUME}")
@@ -41,10 +62,17 @@ spark.sql(f"CREATE VOLUME IF NOT EXISTS {CATALOG}.{SCHEMA}.labels")
 spark.sql(f"CREATE VOLUME IF NOT EXISTS {CATALOG}.{SCHEMA}.checkpoints")
 
 dbutils.fs.mkdirs(LANDING_PATH)
-## Vehicle fleet setup
 
-Each vehicle gets a home base GPS point and a baseline driving profile.
-A few vehicles are pre-assigned a fault window (e.g. overheating, battery drain).
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Vehicle fleet setup
+# MAGIC
+# MAGIC Each vehicle gets a home base GPS point and a baseline driving profile.
+# MAGIC A few vehicles are pre-assigned a fault window (e.g. overheating, battery drain).
+
+# COMMAND ----------
+
 HYDERABAD_LAT, HYDERABAD_LON = 17.3850, 78.4867
 
 vehicles = []
@@ -74,10 +102,17 @@ for vid in fault_vehicle_ids:
     })
 
 print(f"Injected faults: {fault_windows}")
-## Generate one reading for a vehicle at a given timestamp
 
-Applies the fault window (if any) to push temp/battery/rpm out of normal range,
-then separately applies random messiness on top.
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Generate one reading for a vehicle at a given timestamp
+# MAGIC
+# MAGIC Applies the fault window (if any) to push temp/battery/rpm out of normal range,
+# MAGIC then separately applies random messiness on top.
+
+# COMMAND ----------
+
 def in_fault_window(vehicle_id, ts):
     for fw in fault_windows:
         if fw["vehicle_id"] == vehicle_id:
@@ -124,10 +159,17 @@ def make_reading(vehicle, ts, state):
         "dtc_code": dtc_code,
     }
     return reading
-## Apply deliberate messiness
 
-Takes a clean reading and randomly corrupts it, so downstream layers have
-real problems to detect and fix.
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Apply deliberate messiness
+# MAGIC
+# MAGIC Takes a clean reading and randomly corrupts it, so downstream layers have
+# MAGIC real problems to detect and fix.
+
+# COMMAND ----------
+
 def mess_up(reading):
     r = dict(reading)
 
@@ -148,10 +190,17 @@ def mess_up(reading):
         r["event_ts"] = (ts - timedelta(minutes=random.randint(1, 30))).isoformat()
 
     return r
-## Generate and write hourly batches
 
-Each hour of simulated time becomes one JSON file, so Auto Loader in Bronze
-can pick files up incrementally like a real streaming source.
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Generate and write hourly batches
+# MAGIC
+# MAGIC Each hour of simulated time becomes one JSON file, so Auto Loader in Bronze
+# MAGIC can pick files up incrementally like a real streaming source.
+
+# COMMAND ----------
+
 states = {v["vehicle_id"]: {
     "speed": 0.0, "lat": v["home_lat"], "lon": v["home_lon"], "odometer_km": v["odometer_km"]
 } for v in vehicles}
@@ -185,10 +234,17 @@ for hour in range(total_hours):
         print(f"Day {hour // 24 + 1}/{NUM_DAYS} written ({total_readings} readings so far)")
 
 print(f"Done. {total_readings} readings written across {total_hours} files to {LANDING_PATH}")
-## Write ground-truth fault labels
 
-This file is NOT used by Bronze/Silver — it's kept aside to later check whether
-data quality rules and (optionally) anomaly detection actually catch these faults.
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Write ground-truth fault labels
+# MAGIC
+# MAGIC This file is NOT used by Bronze/Silver — it's kept aside to later check whether
+# MAGIC data quality rules and (optionally) anomaly detection actually catch these faults.
+
+# COMMAND ----------
+
 labels_path = f"/Volumes/{CATALOG}/{SCHEMA}/labels/fault_windows.json"
 dbutils.fs.put(labels_path, json.dumps(fault_windows, indent=2), overwrite=True)
 print(f"Fault labels written to {labels_path}")
